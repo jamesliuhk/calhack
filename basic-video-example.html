@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Eluvio Video Sample</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+
+    <script src="https://cdn.jsdelivr.net/npm/@eluvio/elv-client-js@0.2.7/dist/ElvClient-min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+</head>
+<body>
+<div id="app" class="app">
+    <video
+            id="video"
+            controls
+    />
+</div>
+<script type="text/javascript">
+    const PlayHLS = (video, playoutOptions) => {
+        const playoutUrl ='${playoutOptions.hls.playoutUrl}&player_profile=hls-js';
+        const player = new Hls();
+        player.loadSource(playoutUrl);
+        player.attachMedia(video);
+        // Autoplay
+        player.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play();
+    });
+    };
+    const PlayDash = (authToken, video, playoutOptions) => {
+        const player = dashjs.MediaPlayer().create();
+        if(playoutOptions.dash.drms) {
+            const widevineUrl = playoutOptions.dash.drms.widevine.licenseServers
+                .find(server => server.startsWith("https"));
+            player.setProtectionData({
+                "com.widevine.alpha": {
+                    "serverURL": widevineUrl,
+                    "httpRequestHeaders": {
+                        "Authorization": `Bearer ${authToken}`
+                    },
+                    "withCredentials": false
+                }
+            });
+        }
+        player.initialize(video, playoutOptions.dash.playoutUrl, true);
+    };
+    const Load = async () => {
+        const configUrl = "https://demo.net955210.contentfabric.io/config";
+        const client = await ElvClient.FromConfigurationUrl({configUrl});
+        const wallet = client.GenerateWallet();
+        const mnemonic = wallet.GenerateMnemonic();
+        const signer = wallet.AddAccountFromMnemonic({mnemonic});
+        await client.SetSigner({signer});
+        const versionHash = "hq__B1WL1oJa9MCiRpWXBmaoHtAwQdgNGKU36vazGDjjg9e8xS7uQADLct8j5NByXG3qnNAVQ7DcTh";
+        const availableDRMs = await client.AvailableDRMs();
+        const playoutOptions = await client.PlayoutOptions({
+            versionHash,
+            protocols: ["dash", "hls"],
+            drms: availableDRMs
+        });
+        const video = document.getElementById("video");
+        if(playoutOptions.hls) {
+            PlayHLS(video, playoutOptions);
+        } else {
+            const authToken = await client.GenerateStateChannelToken({versionHash});
+            PlayDash(authToken, video, playoutOptions);
+        }
+    };
+    Load()
+</script>
+<style>
+    html,
+    body,
+    #app {
+        display: block;
+        height: 100%;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    #app {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    video {
+        height: 50vh;
+        margin-bottom: 25vh;
+    }
+</style>
+</body>
+</html>
